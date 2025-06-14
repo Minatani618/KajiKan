@@ -5,7 +5,7 @@ const csv = require('csv-parser');
 const bodyParser = require('body-parser');
 
 const app = express();
-const PORT = 3000;
+const PORT = 3010;
 const CSV_PATH = path.join(__dirname, 'tasks.csv');
 const MARKS_CSV_PATH = path.join(__dirname, 'marks.csv');
 
