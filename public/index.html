@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>タスク管理アプリ</title>
+  <style>
+    body { margin: 0; font-family: sans-serif; }
+    .container { display: flex; height: 100vh; }
+    .left { flex: 1; background: #f5f5f5; padding: 2em; }
+    .right { flex: 1; background: #fff; padding: 2em; display: flex; flex-direction: column; gap: 1em; }
+    .task-btn { padding: 1em 2em; font-size: 1.1em; border: none; border-radius: 6px; background: #eee; color: #333; cursor: pointer; transition: background 0.2s, color 0.2s; }
+    .task-btn.completed { background: #4caf50; color: #fff; }
+    .add-form { display: flex; gap: 0.5em; }
+    .add-form input { flex: 1; padding: 0.5em; font-size: 1em; }
+    .add-form button { padding: 0.5em 1em; font-size: 1em; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="left">
+      <h2>新しいタスクを追加</h2>
+      <form class="add-form" id="addForm">
+        <input type="text" id="taskTitle" placeholder="タスク名" required />
+        <button type="submit">追加</button>
+      </form>
+    </div>
+    <div class="right">
+      <h2>タスク一覧</h2>
+      <div id="tasks"></div>
+    </div>
+  </div>
+  <script>
+    async function fetchTasks() {
+      const res = await fetch('/tasks');
+      const tasks = await res.json();
+      renderTasks(tasks);
+    }
+    function renderTasks(tasks) {
+      const tasksDiv = document.getElementById('tasks');
+      tasksDiv.innerHTML = '';
+      tasks.forEach(task => {
+        const btn = document.createElement('button');
+        btn.textContent = task.title;
+        btn.className = 'task-btn' + (task.completed ? ' completed' : '');
+        btn.onclick = async () => {
+          await fetch(`/tasks/${task.id}/toggle`, { method: 'PATCH' });
+          fetchTasks();
+        };
+        tasksDiv.appendChild(btn);
+      });
+    }
+    document.getElementById('addForm').onsubmit = async e => {
+      e.preventDefault();
+      const title = document.getElementById('taskTitle').value.trim();
+      if (!title) return;
+      await fetch('/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title })
+      });
+      document.getElementById('taskTitle').value = '';
+      fetchTasks();
+    };
+    fetchTasks();
+  </script>
+</body>
+</html>

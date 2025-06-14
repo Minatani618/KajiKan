@@ -1,0 +1,5 @@
+title,taskType,repeatType,interval,weekdays,monthdays,nextDate,startDate,lastDone
+"燃えるごみをだす",point,weekday,,2-5,,2025-06-17,2025-06-17,
+"コンタクトレンズを交換する",stock,interval,14,,,2025-06-15,2025-06-15,
+"弁当用の冷凍食品を買い足し",stock,weekday,,5,,2025-06-13,2025-06-13,2025-06-13
+"a",point,interval,1,,,2025-06-13,2025-06-13,2025-06-13
