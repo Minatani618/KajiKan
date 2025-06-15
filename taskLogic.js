@@ -153,15 +153,32 @@ function classifyMonthdayTask(task, today, todayDate) {
 }
 
 function classifyOnceTask(task, todayStr) {
-  const isToday = (task.nextDate === todayStr||task.lastDone <= todayStr);
+  let isToday = false;
+  // 一回でも完了していれば表示しない
+  if (task.lastDone && task.lastDone !== "") {
+    return { isToday: false, msg: '', nextExecDate: task.nextDate };
+  }
+  //ポイントタスクの場合 次回実行と今日の日付が同じ場合のみ今日のタスクとする
+  isToday = task.taskType === 'point' && task.nextDate === todayStr ? true : false ;
+  //ストックタスクの場合 次回実行が今日の日付より前の日付であれば今日のタスクとする
+  isToday = task.taskType === 'stock' && task.nextDate <= todayStr ? true : isToday ;
   const nextExecDate = task.nextDate;
   let msg = '';
   if (!isToday) msg = `実行日: ${task.nextDate}`;
   return { isToday, msg, nextExecDate };
 }
 
+function filterUncompletedOnceTasks(tasks) {
+  return tasks.filter(task => {
+    if (task.repeatType === 'once') {
+      return !task.lastDone || task.lastDone === '';
+    }
+    return true;
+  });
+}
+
 function classifyTasks(tasks, marks, today, todayStr, todayWeekday, todayDate) {
-  return tasks.map(task => {
+  return filterUncompletedOnceTasks(tasks).map(task => {
     const { isToday, taskObj } = classifyTask(task, marks, today, todayStr, todayWeekday, todayDate);
     return { isToday, task: taskObj };
   });

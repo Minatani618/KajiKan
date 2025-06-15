@@ -110,25 +110,6 @@
         otherDiv.appendChild(wrapper);
       });
     }
-    // 0時0分に完了APIを呼ぶ
-    function scheduleMidnight() {
-      const now = new Date();
-      const next = new Date(now);
-      next.setHours(24,0,0,0);
-      setTimeout(async () => {
-        const today = getToday();
-        for (const title in markedTasks) {
-          if (markedTasks[title] === today) {
-            await fetch(`/api/tasks/${encodeURIComponent(title)}/done`, { method: 'POST' });
-          }
-        }
-        markedTasks = {};
-        saveMarkedTasks();
-        fetchTasks();
-        scheduleMidnight();
-      }, next - now);
-    }
-
     // テーマ切り替え
     const themeBtn = document.getElementById('toggle-theme');
     function setTheme(mode) {
@@ -209,7 +190,6 @@
       // 完了後にタスク一覧を再取得し、UIを最新状態にする
       await renderTasksClassified();
     };
-    console.log('Scheduling midnight task completion...');
   </script>
   <script src="editModal.js"></script>
 </body>

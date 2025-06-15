@@ -67,7 +67,7 @@ app.get('/api/tasks', async (req, res) => {
     return res.json(filtered);
   } else {
     // 分類付き返却
-    const classifiedArr = classifyTasks(tasks, marks, today, todayStr, todayWeekday, todayDate);
+    const classifiedArr = classifyTasks(tasks, marks, today, todayStr, todayWeekday, todayDate).filter(Boolean); // undefinedを除外
     // {todo: [...], other: [...]} の形に変換
     const todo = [], other = [];
     classifiedArr.forEach(item => {
@@ -186,7 +186,7 @@ app.post('/api/tasks/marks/complete', async (req, res) => {
   });
   if (updated) {
     const header = 'title,taskType,repeatType,interval,weekdays,monthdays,nextDate,startDate,lastDone\n';
-    const lines = updatedTasks.map(t => `"${t.title}",${t.taskType},${t.repeatType || ''},${t.interval || ''},${t.weekdays || ''},${t.monthdays || ''},${t.nextDate || ''},${t.startDate || ''},${t.lastDone || ''}`).join('\n');
+    const lines = updatedTasks.map(t => `"${t.title}",${t.taskType || ''},${t.repeatType || ''},${t.interval || ''},${t.weekdays || ''},${t.monthdays || ''},${t.nextDate || ''},${t.startDate || ''},${t.lastDone || ''}`).join('\n');
     fs.writeFileSync(CSV_PATH, header + lines + '\n');
     Object.keys(marks).forEach(title => {
       if (marks[title] === today) delete marks[title];
@@ -209,29 +209,33 @@ app.listen(PORT, () => {
 });
 
 // === サーバー側 0時スケジューラ ===
+async function processMidnightTasks() {
+  const today = getTodayJST();
+  const marks = await readMarksFromCSV();
+  const tasks = await readTasksFromCSV();
+  let updated = false;
+  const updatedTasks = tasks.map(task => {
+    if (marks[task.title] <= today) {
+      updated = true;
+      return { ...task, lastDone: today };
+    }
+    return task;
+  });
+  if (updated) {
+    const header = 'title,taskType,repeatType,interval,weekdays,monthdays,nextDate,startDate,lastDone\n';
+    const lines = updatedTasks.map(t => `"${t.title}",${t.taskType || ''},${t.repeatType || ''},${t.interval || ''},${t.weekdays || ''},${t.monthdays || ''},${t.nextDate || ''},${t.startDate || ''},${t.lastDone || ''}`).join('\n');
+    fs.writeFileSync(CSV_PATH, header + lines + '\n');
+  }
+  // マークもリセット
+  writeMarksToCSV({});
+}
+
 function scheduleServerMidnightTask() {
   const now = new Date(Date.now() + 9 * 60 * 60 * 1000); // JST
   const next = new Date(now);
   next.setHours(24, 0, 0, 0);
   setTimeout(async () => {
-    const today = getTodayJST();
-    const marks = await readMarksFromCSV();
-    const tasks = await readTasksFromCSV();
-    let updated = false;
-    const updatedTasks = tasks.map(task => {
-      if (marks[task.title] === today) {
-        updated = true;
-        return { ...task, lastDone: today };
-      }
-      return task;
-    });
-    if (updated) {
-      const header = 'title,interval,startDate,lastDone\n';
-      const lines = updatedTasks.map(t => `"${t.title}",${t.interval},${t.startDate},${t.lastDone || ''}`).join('\n');
-      fs.writeFileSync(CSV_PATH, header + lines + '\n');
-    }
-    // マークもリセット
-    writeMarksToCSV({});
+    await processMidnightTasks();
     scheduleServerMidnightTask();
   }, next - now);
 }
