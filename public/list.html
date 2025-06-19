@@ -19,97 +19,175 @@
     </div>
   </div>
   <script>
-    // タスクボタンを生成
-    function createTaskButton(task, isToday, marked, onClick, msg) {
-      const btn = document.createElement('button');
-      const typeLabel = task.taskType === 'point' ? 'ポイント' : 'ストック';
-      let repeatDisp = '';
-      if (task.repeatType === 'interval') {
-        repeatDisp = `${task.interval}日おき`;
-      } else if (task.repeatType === 'weekday') {
-        // ハイフン区切りで分割
-        const days = (task.weekdays || '').split('-').map(w => ['日','月','火','水','木','金','土'][parseInt(w,10)]).join(',');
-        repeatDisp = `毎週${days}`;
-      } else if (task.repeatType === 'monthday') {
-        repeatDisp = `毎月${(task.monthdays || '').split(',').filter(Boolean).join('日,')}日`;
-      } else if (task.repeatType === 'once') {
-        repeatDisp = `一回限り（${task.nextDate}）`;
-      }
-      btn.textContent = `${task.title}（${typeLabel}, ${repeatDisp}, ${task.startDate}開始）` + (msg ? ` - ${msg}` : '');
-      btn.className = 'task-btn' + (isToday && marked ? ' done' : '');
-      if (isToday) {
-        btn.onclick = onClick;
-      } else {
-        btn.disabled = true;
-        btn.style.opacity = 0.7;
-      }
-      return btn;
-    }
+    /**
+     * TaskUI: タスク一覧画面のUI・状態管理を担うオブジェクト
+     * - タスクの描画、マーク、編集、バリデーション、API通信などを集約
+     * - 保守性・凝集度向上のため、関連機能をメソッドとしてまとめる
+     */
+    const TaskUI = {
+      // サーバーから取得したマーク済みタスク情報（タイトル→日付）
+      markedTasks: {},
+      // サーバーから取得した必須項目定義
+      requiredFields: null,
 
-    // 編集ボタン生成
-    function createEditButton(task) {
-      const btn = document.createElement('button');
-      btn.textContent = '編集';
-      btn.style.marginLeft = '1em';
-      btn.onclick = async () => {
-        createEditModal(task);
-        setupEditModalEvents(task, requiredFields, async (task, values) => {
-          await submitEditModal(task, values);
-          await renderTasksClassified();
+      /**
+       * サーバーからマーク済みタスク情報を取得し、markedTasksに格納
+       */
+      async fetchMarkedTasks() {
+        const res = await fetch('/api/tasks/marks');
+        this.markedTasks = await res.json();
+      },
+
+      /**
+       * 指定タスクのマーク状態をサーバーに反映
+       * @param {string} title - タスクタイトル
+       * @param {boolean} marked - マーク状態
+       */
+      async updateMarkStatus(title, marked) {
+        await fetch(`/api/tasks/${encodeURIComponent(title)}/mark`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ marked })
         });
-      };
-      return btn;
-    }
+      },
 
-    // サーバー側のマーク状態取得
-    let markedTasks = {};
-    async function fetchMarkedTasks() {
-      const res = await fetch('/api/tasks/marks');
-      markedTasks = await res.json();
-    }
-    async function markTask(title, marked) {
-      await fetch(`/api/tasks/${encodeURIComponent(title)}/mark`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ marked })
-      });
-      await renderTasksClassified();
-    }
+      /**
+       * マークボタン押下時のハンドラ（マーク状態更新＋再描画）
+       */
+      async handleMarkButtonClick(title, marked) {
+        await this.updateMarkStatus(title, marked);
+        await this.renderTasks();
+      },
 
-    // タスク描画
-    async function renderTasksClassified() {
-      const res = await fetch('/api/tasks?classified=true');
-      const { todo, other } = await res.json();
-      console.log('Rendering tasks:', { todo, other });
-      const todoDiv = document.getElementById('tasks-todo');
-      const otherDiv = document.getElementById('tasks-other');
-      todoDiv.innerHTML = '';
-      otherDiv.innerHTML = '';
-      // 本日実行タスク
-      todo.forEach(task => {
-        const btn = createTaskButton(
-          task,
-          true,
-          task.marked,
-          () => markTask(task.title, !task.marked)
-        );
-        const editBtn = createEditButton(task);
-        const wrapper = document.createElement('div');
-        wrapper.appendChild(btn);
-        wrapper.appendChild(editBtn);
-        todoDiv.appendChild(wrapper);
-      });
-      // その他タスク
-      other.forEach(task => {
-        const msg = task.msg || '';
-        const otherBtn = createTaskButton(task, false, false, null, msg);
-        const editBtn = createEditButton(task);
-        const wrapper = document.createElement('div');
-        wrapper.appendChild(otherBtn);
-        wrapper.appendChild(editBtn);
-        otherDiv.appendChild(wrapper);
-      });
-    }
+      /**
+       * タスクボタン要素を生成
+       */
+      createTaskButton(task, isToday, marked, onClick, msg) {
+        const btn = document.createElement('button');
+        const typeLabel = task.taskType === 'point' ? 'ポイント' : 'ストック';
+        let repeatDisp = '';
+        if (task.repeatType === 'interval') {
+          repeatDisp = `${task.interval}日おき`;
+        } else if (task.repeatType === 'weekday') {
+          const days = (task.weekdays || '').split('-').map(w => ['日','月','火','水','木','金','土'][parseInt(w,10)]).join(',');
+          repeatDisp = `毎週${days}`;
+        } else if (task.repeatType === 'monthday') {
+          repeatDisp = `毎月${(task.monthdays || '').split(',').filter(Boolean).join('日,')}日`;
+        } else if (task.repeatType === 'once') {
+          repeatDisp = `一回限り（${task.nextDate}）`;
+        }
+        btn.textContent = `${task.title}（${typeLabel}, ${repeatDisp}, ${task.startDate}開始）` + (msg ? ` - ${msg}` : '');
+        btn.className = 'task-btn' + (isToday && marked ? ' done' : '');
+        if (isToday) {
+          btn.onclick = onClick;
+        } else {
+          btn.disabled = true;
+          btn.style.opacity = 0.7;
+        }
+        return btn;
+      },
+
+      /**
+       * 編集ボタン要素を生成
+       */
+      createEditButton(task) {
+        const btn = document.createElement('button');
+        btn.textContent = '編集';
+        btn.style.marginLeft = '1em';
+        btn.onclick = async () => {
+          createEditModal(task);
+          setupEditModalEvents(task, this.requiredFields, async (task, values) => {
+            await this.submitEditModal(task, values);
+            await this.renderTasks();
+          });
+        };
+        return btn;
+      },
+
+      /**
+       * 本日実行タスクの描画
+       */
+      renderTodayTasks(todo, todoDiv) {
+        todo.forEach(task => {
+          const btn = this.createTaskButton(
+            task,
+            true,
+            task.isMarked,
+            () => this.handleMarkButtonClick(task.title, !task.isMarked),
+          );
+          const editBtn = this.createEditButton(task);
+          const wrapper = document.createElement('div');
+          wrapper.appendChild(btn);
+          wrapper.appendChild(editBtn);
+          todoDiv.appendChild(wrapper);
+        });
+      },
+
+      /**
+       * その他タスクの描画
+       */
+      renderOtherTasks(other, otherDiv) {
+        other.forEach(task => {
+          const msg = task.msg || '';
+          const otherBtn = this.createTaskButton(task, false, false, null, msg);
+          const editBtn = this.createEditButton(task);
+          const wrapper = document.createElement('div');
+          wrapper.appendChild(otherBtn);
+          wrapper.appendChild(editBtn);
+          otherDiv.appendChild(wrapper);
+        });
+      },
+
+      /**
+       * タスク一覧を取得して描画
+       */
+      async renderTasks() {
+        const res = await fetch('/api/tasks?classified=true');
+        const { todo, other } = await res.json();
+        const todoDiv = document.getElementById('tasks-todo');
+        const otherDiv = document.getElementById('tasks-other');
+        todoDiv.innerHTML = '';
+        otherDiv.innerHTML = '';
+        this.renderTodayTasks(todo, todoDiv);
+        this.renderOtherTasks(other, otherDiv);
+      },
+
+      /**
+       * サーバーから必須項目定義を取得
+       */
+      async fetchRequiredFields() {
+        const res = await fetch('/api/tasks/fields');
+        this.requiredFields = await res.json();
+      },
+
+      /**
+       * 必須項目バリデーション
+       */
+      validateRequiredFields(fields, values) {
+        const { common, byRepeatType } = fields;
+        let error = '';
+        for (const f of common) {
+          if (!values[f]) error = `${f}は必須です`;
+        }
+        const byType = byRepeatType[values.repeatType] || [];
+        for (const f of byType) {
+          if (!values[f]) error = `${f}は必須です`;
+        }
+        return error;
+      },
+
+      /**
+       * 編集API送信
+       */
+      async submitEditModal(task, values) {
+        await fetch(`/api/tasks/${encodeURIComponent(task.title)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(values)
+        });
+      },
+    };
+
     // テーマ切り替え
     const themeBtn = document.getElementById('toggle-theme');
     function setTheme(mode) {
@@ -136,10 +214,10 @@
       const res = await fetch('/api/tasks/fields');
       requiredFields = await res.json();
     }
-    // 初期化時にrenderTasksClassified()を呼ぶ
+    // 初期化時にTaskUIのメソッドを呼ぶ
     document.addEventListener('DOMContentLoaded', async () => {
-      await fetchRequiredFields();
-      renderTasksClassified();
+      await TaskUI.fetchRequiredFields();
+      await TaskUI.renderTasks();
     });
 
     // 必須項目バリデーション
@@ -183,13 +261,7 @@
         fetchTasks();
       };
     }
-
-    // すべてのマーク済みタスクを完了ボタン
-    document.getElementById('complete-marked').onclick = async () => {
-      await fetch('/api/tasks/marks/complete', { method: 'POST' });
-      // 完了後にタスク一覧を再取得し、UIを最新状態にする
-      await renderTasksClassified();
-    };
+    
   </script>
   <script src="editModal.js"></script>
 </body>

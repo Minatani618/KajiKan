@@ -73,6 +73,8 @@ function classifyTask(task, marks, today, todayStr, todayWeekday, todayDate) {
   let isToday = false;
   let msg = '';
   let nextExecDate = null;
+
+  // isTodayの計算
   if (task.repeatType === 'interval') {
     ({ isToday, msg, nextExecDate } = classifyIntervalTask(task, todayStr));
   } else if (task.repeatType === 'weekday') {
@@ -82,9 +84,12 @@ function classifyTask(task, marks, today, todayStr, todayWeekday, todayDate) {
   } else if (task.repeatType === 'once') {
     ({ isToday, msg, nextExecDate } = classifyOnceTask(task, todayStr));
   }
+
+  // isOverdueはCSVから読み込んだ値をそのまま使用
   const taskObj = isToday
     ? { ...task, marked: marks[task.title] === todayStr }
     : { ...task, msg, nextExecDate };
+
   return { isToday, taskObj };
 }
 
@@ -98,8 +103,11 @@ function classifyIntervalTask(task, todayStr) {
   } else {
     nextDate = new Date(task.startDate);
   }
+  while (nextDate.toISOString().slice(0, 10) < todayStr) {
+    nextDate.setDate(nextDate.getDate() + interval);
+  }
   const nextDateStr = nextDate.toISOString().slice(0, 10);
-  const isToday = (todayStr === nextDateStr) 
+  const isToday = (todayStr === nextDateStr);
   const nextExecDate = nextDateStr;
   let msg = '';
   if (!isToday) msg = todayStr < nextDateStr ? `あと${getDiffDays(todayStr, nextDateStr)}日で実行予定` : '未定義';
@@ -178,7 +186,17 @@ function filterUncompletedOnceTasks(tasks) {
 }
 
 function classifyTasks(tasks, marks, today, todayStr, todayWeekday, todayDate) {
-  return filterUncompletedOnceTasks(tasks).map(task => {
+  // onceタスクでlastDoneが空でない（＝既に実行済み）は除外
+  const filteredTasks = tasks.filter(task => {
+    if (task.repeatType === 'once') {
+      const isUncompleted = !task.lastDone || task.lastDone === '';
+      if (!isUncompleted) {
+        return false;
+      }
+    }
+    return true;
+  });
+  return filteredTasks.map(task => {
     const { isToday, taskObj } = classifyTask(task, marks, today, todayStr, todayWeekday, todayDate);
     return { isToday, task: taskObj };
   });
@@ -202,6 +220,30 @@ function filterTodayTasks(tasks, todayStr) {
   });
 }
 
+function updateTaskState(task, todayStr) {
+  // isOverdueの計算
+  if (task.taskType === 'stock' && task.nextDate < todayStr && (!task.lastDone || task.lastDone < task.nextDate)) {
+    task.isOverdue = true;
+  } else {
+    task.isOverdue = false;
+  }
+
+  // isOverdueがtrueならisTodayも必ずtrue
+  if (task.isOverdue) {
+    task.isToday = true;
+  } else {
+    // nextDateが空、またはisOverdue=falseかつnextDateが過去なら再計算
+    if (!task.nextDate || task.nextDate < todayStr) {
+      const todayJSTDate = new Date(todayStr);
+      task.nextDate = calculateNextDate(task, todayJSTDate);
+    }
+    // isTodayの判定
+    task.isToday = task.nextDate === todayStr;
+  }
+
+  return task;
+}
+
 module.exports = {
   calculateNextDate,
   calcNextDateInterval,
@@ -213,5 +255,6 @@ module.exports = {
   classifyMonthdayTask,
   classifyOnceTask,
   classifyTasks,
-  filterTodayTasks
+  filterTodayTasks,
+  updateTaskState
 };

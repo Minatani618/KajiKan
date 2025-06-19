@@ -60,6 +60,41 @@
   </div>
   <script src="editModal.js"></script>
   <script>
+
+    // テーマスタイルを切り替え用スタイル文字列
+    const LightThemeStyle = `
+      body { font-family: sans-serif; background: #f5f5f5; color: #181a1b; }
+      .container { max-width: 100vw; min-width: 700px; width: 100%; margin: 3em auto; background: #fff; padding: 2em; border-radius: 8px; box-shadow: 0 2px 8px #0001; }
+      h2 { text-align: center; color: #181a1b; }
+      form { display: flex; flex-direction: column; gap: 1em; }
+      label, .edit-label { font-weight: bold; color: #181a1b; }
+      input, select { padding: 0.5em; font-size: 1em; border-radius: 4px; border: 1px solid #ccc; }
+      button { padding: 0.7em; font-size: 1em; border: none; border-radius: 4px; background: #4caf50; color: #fff; cursor: pointer; }
+      .msg { text-align: center; margin-top: 1em; color: #4caf50; }
+      .error { color: #e53935; }
+      table { width: 100%; border-collapse: collapse; margin-top: 1em; }
+      th, td { padding: 0.7em; text-align: left; border: 1px solid #ccc; }
+      th { background: #f0f0f0; }
+      .type-btns button { margin-right: 0.5em; background: #888; color: #fff; }
+      .type-btns button.selected { background: #4caf50; }
+    `;
+    const DarkThemeStyle = `
+      body { font-family: sans-serif; background: #181a1b; color: #f5f5f5; }
+      .container { max-width: 100vw; min-width: 700px; width: 100%; margin: 3em auto; background: #23272a; padding: 2em; border-radius: 8px; box-shadow: 0 2px 8px #0008; }
+      h2 { text-align: center; color: #fff; }
+      form { display: flex; flex-direction: column; gap: 1em; }
+      label, .edit-label { font-weight: bold; color: #f5f5f5; }
+      input, select { padding: 0.5em; font-size: 1em; border-radius: 4px; border: 1px solid #ccc; }
+      button { padding: 0.7em; font-size: 1em; border: none; border-radius: 4px; background: #4caf50; color: #fff; cursor: pointer; }
+      .msg { text-align: center; margin-top: 1em; color: #4caf50; }
+      .error { color: #e53935; }
+      table { width: 100%; border-collapse: collapse; margin-top: 1em; }
+      th, td { padding: 0.7em; text-align: left; border: 1px solid #ccc; }
+      th { background: #23272a; color: #fff; }
+      .type-btns button { margin-right: 0.5em; background: #888; color: #fff; }
+      .type-btns button.selected { background: #4caf50; }
+    `;
+    
     // 種類ボタンUI
     document.querySelectorAll('.type-btn').forEach(btn => {
       btn.onclick = function(e) {
@@ -91,10 +126,75 @@
       requiredFields = await res.json();
     }
 
-    document.addEventListener('DOMContentLoaded', async () => {
-      await fetchRequiredFields();
-      fetchTasks();
-    });
+    // --- タスク一覧をサーバーから取得 --- 
+    async function fetchTasks() {
+      const res = await fetch('/api/tasks?classified=true');
+      const { todo, other } = await res.json();
+      return [...todo, ...other];
+    }
+
+    // --- タスク描画 ---
+    function renderTaskList(tasks) {
+      const listDiv = document.getElementById('taskList');
+      listDiv.innerHTML = '';
+
+      // タスクがない場合のメッセージ
+      if (!tasks.length) {
+        listDiv.textContent = 'タスクがありません';
+        return;
+      }
+
+      // ヘッダー行を作成
+      const table = document.createElement('table');
+      table.innerHTML = '<tr><th>タスク名</th><th>種別</th><th>繰り返し</th><th>開始日</th><th>編集</th></tr>';
+
+      // 各タスクを行として追加
+      tasks.forEach(task => {
+
+        // タスクの行を作成
+        const tr = document.createElement('tr');
+        const titleInnerHTML=`<td>${task.title}</td>`;
+        const taskTypeInnerHTML=`<td>${task.taskType === 'point' ? 'ポイント' : 'ストック'}</td>`;
+        const repeatTypeInnerHTML=`<td>${createRepeatDispText(task)}</td>`;
+        const startDateInnerHTML=`<td>${task.startDate}</td>`;
+        tr.innerHTML =  `${titleInnerHTML}${taskTypeInnerHTML}${repeatTypeInnerHTML}${startDateInnerHTML}`;
+
+        // 編集ボタンを追加
+        const editTd = document.createElement('td');
+        const editBtn = document.createElement('button');
+        editBtn.textContent = '編集';
+        editBtn.onclick = async () => {
+          onEditButtonClick(task);
+        };
+        editTd.appendChild(editBtn);
+        tr.appendChild(editTd);
+        table.appendChild(tr);
+      });
+      listDiv.appendChild(table);
+    }
+
+    const createRepeatDispText = (task) => {
+      if (task.repeatType === 'interval') {
+        return `${task.interval}日おき`;
+      } else if (task.repeatType === 'weekday') {
+        const days = (task.weekdays || '').split('-').map(w => ['日','月','火','水','木','金','土'][parseInt(w,10)]).join(',');
+        return `毎週${days}`;
+      } else if (task.repeatType === 'monthday') {
+        return `毎月${(task.monthdays || '').split('-').filter(Boolean).join('日,')}日`;
+      } else if (task.repeatType === 'once') {
+        return `一回限り（${task.nextDate}）`;
+      }
+      return '';
+    };
+
+    // --- 初期化処理 ---
+    async function init() {
+      await fetchRequiredFields();       // 必須項目定義を取得
+      const tasks = await fetchTasks();  // タスク一覧を取得
+      renderTaskList(tasks);             // タスク一覧を描画
+    }
+
+    document.addEventListener('DOMContentLoaded', init);
 
     // --- 関数分割ここから ---
     // 必須項目バリデーション
@@ -140,7 +240,7 @@
       return res;
     }
 
-    // --- 編集ボタン押下時の処理 ---
+    // --- 編集ボタン押下時の処理 別ファイル(editModal.jsを使用) ---
     function onEditButtonClick(task) {
       createEditModal(task);
       setupEditModalEvents(task, requiredFields, async (task, values) => {
@@ -149,102 +249,31 @@
       });
     }
 
-    // --- タスク一覧取得・表示 ---
-    async function fetchTasks() {
-      const res = await fetch('/api/tasks?classified=true');
-      const { todo, other } = await res.json();
-      renderTaskList([...todo, ...other]);
-    }
-
-    function renderTaskList(tasks) {
-      const listDiv = document.getElementById('taskList');
-      listDiv.innerHTML = '';
-      if (!tasks.length) {
-        listDiv.textContent = 'タスクがありません';
-        return;
-      }
-      const table = document.createElement('table');
-      table.innerHTML = '<tr><th>タスク名</th><th>種別</th><th>繰り返し</th><th>開始日</th><th>編集</th></tr>';
-      tasks.forEach(task => {
-        const tr = document.createElement('tr');
-        let repeatDisp = '';
-        if (task.repeatType === 'interval') {
-          repeatDisp = `${task.interval}日おき`;
-        } else if (task.repeatType === 'weekday') {
-          // ハイフン区切りで分割
-          const days = (task.weekdays || '').split('-').map(w => ['日','月','火','水','木','金','土'][parseInt(w,10)]).join(',');
-          repeatDisp = `毎週${days}`;
-        } else if (task.repeatType === 'monthday') {
-          // ハイフン区切りで分割
-          repeatDisp = `毎月${(task.monthdays || '').split('-').filter(Boolean).join('日,')}日`;
-        } else if (task.repeatType === 'once') {
-          repeatDisp = `一回限り（${task.nextDate}）`;
-        }
-        tr.innerHTML = `<td>${task.title}</td><td>${task.taskType === 'point' ? 'ポイント' : 'ストック'}</td><td>${repeatDisp}</td><td>${task.startDate}</td>`;
-        const editTd = document.createElement('td');
-        const editBtn = document.createElement('button');
-        editBtn.textContent = '編集';
-        editBtn.onclick = async () => {
-          onEditButtonClick(task);
-        };
-        editTd.appendChild(editBtn);
-        tr.appendChild(editTd);
-        table.appendChild(tr);
-      });
-      listDiv.appendChild(table);
-    }
-
-    document.addEventListener('DOMContentLoaded', fetchTasks);
-
     // テーマ切り替え
     const themeStyle = document.getElementById('theme-style');
     const themeBtn = document.getElementById('toggle-theme');
+
     function setTheme(mode) {
       if (mode === 'light') {
-        themeStyle.textContent = `
-          body { font-family: sans-serif; background: #f5f5f5; color: #181a1b; }
-          .container { max-width: 100vw; min-width: 700px; width: 100%; margin: 3em auto; background: #fff; padding: 2em; border-radius: 8px; box-shadow: 0 2px 8px #0001; }
-          h2 { text-align: center; color: #181a1b; }
-          form { display: flex; flex-direction: column; gap: 1em; }
-          label, .edit-label { font-weight: bold; color: #181a1b; }
-          input, select { padding: 0.5em; font-size: 1em; border-radius: 4px; border: 1px solid #ccc; }
-          button { padding: 0.7em; font-size: 1em; border: none; border-radius: 4px; background: #4caf50; color: #fff; cursor: pointer; }
-          .msg { text-align: center; margin-top: 1em; color: #4caf50; }
-          .error { color: #e53935; }
-          table { width: 100%; border-collapse: collapse; margin-top: 1em; }
-          th, td { padding: 0.7em; text-align: left; border: 1px solid #ccc; }
-          th { background: #f0f0f0; }
-          .type-btns button { margin-right: 0.5em; background: #888; color: #fff; }
-          .type-btns button.selected { background: #4caf50; }
-        `;
+        themeStyle.textContent = LightThemeStyle;
         themeBtn.textContent = 'ダークモード';
       } else {
-        themeStyle.textContent = `
-          body { font-family: sans-serif; background: #181a1b; color: #f5f5f5; }
-          .container { max-width: 100vw; min-width: 700px; width: 100%; margin: 3em auto; background: #23272a; padding: 2em; border-radius: 8px; box-shadow: 0 2px 8px #0008; }
-          h2 { text-align: center; color: #fff; }
-          form { display: flex; flex-direction: column; gap: 1em; }
-          label, .edit-label { font-weight: bold; color: #f5f5f5; }
-          input, select { padding: 0.5em; font-size: 1em; border-radius: 4px; border: 1px solid #ccc; }
-          button { padding: 0.7em; font-size: 1em; border: none; border-radius: 4px; background: #4caf50; color: #fff; cursor: pointer; }
-          .msg { text-align: center; margin-top: 1em; color: #4caf50; }
-          .error { color: #e53935; }
-          table { width: 100%; border-collapse: collapse; margin-top: 1em; }
-          th, td { padding: 0.7em; text-align: left; border: 1px solid #ccc; }
-          th { background: #23272a; color: #fff; }
-          .type-btns button { margin-right: 0.5em; background: #888; color: #fff; }
-          .type-btns button.selected { background: #4caf50; }
-        `;
+        themeStyle.textContent = DarkThemeStyle;
         themeBtn.textContent = 'ライトモード';
       }
       localStorage.setItem('theme', mode);
     }
-    themeBtn.onclick = () => {
-      const current = localStorage.getItem('theme') || 'dark';
-      setTheme(current === 'dark' ? 'light' : 'dark');
-    };
+
+    function createThemeToggleButton() {
+      themeBtn.onclick = () => {
+        const current = localStorage.getItem('theme') || 'dark';
+        setTheme(current === 'dark' ? 'light' : 'dark');
+      };
+    }
+
     // 初期テーマ
     setTheme(localStorage.getItem('theme') || 'dark');
+    createThemeToggleButton();
 
     // 登録フォーム送信時のバリデーション
     document.getElementById('registerForm').onsubmit = async function(e) {
@@ -269,6 +298,7 @@
         msg.className = 'msg error';
       }
     };
+
   </script>
 </body>
 </html>
