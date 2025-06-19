@@ -183,6 +183,18 @@ app.post('/api/tasks/:title/mark', async (req, res) => {
   res.json({ success: true });
 });
 
+// タスク削除
+app.delete('/api/tasks/:title', async (req, res) => {
+  const { title } = req.params;
+  const task = await getTaskByTitle(title);
+  console.log(task);
+  if (!task) {
+    return res.status(404).json({ message: 'タスクが見つかりません' });
+  }
+  await updateTaskFieldsByTitle(title, { isDeleted: true });
+  res.json({ message: 'タスクを削除しました' });
+});
+
 // ページルーティング
 app.get('/register', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'register.html'));

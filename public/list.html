@@ -14,7 +14,6 @@
     <div class="tasks" id="tasks-other"></div>
     <div style="margin:1em 0; text-align:center;">
       <button id="toggle-theme">ライトモード</button>
-      <button id="complete-marked" style="margin-left:1em;background:#2196f3;">マーク済みタスクをすべて完了</button>
       <a href="/register.html"><button>タスク登録画面へ</button></a>
     </div>
   </div>
@@ -115,10 +114,9 @@
             task.isMarked,
             () => this.handleMarkButtonClick(task.title, !task.isMarked),
           );
-          const editBtn = this.createEditButton(task);
+
           const wrapper = document.createElement('div');
           wrapper.appendChild(btn);
-          wrapper.appendChild(editBtn);
           todoDiv.appendChild(wrapper);
         });
       },
@@ -130,10 +128,8 @@
         other.forEach(task => {
           const msg = task.msg || '';
           const otherBtn = this.createTaskButton(task, false, false, null, msg);
-          const editBtn = this.createEditButton(task);
           const wrapper = document.createElement('div');
           wrapper.appendChild(otherBtn);
-          wrapper.appendChild(editBtn);
           otherDiv.appendChild(wrapper);
         });
       },
@@ -261,7 +257,7 @@
         fetchTasks();
       };
     }
-    
+
   </script>
   <script src="editModal.js"></script>
 </body>

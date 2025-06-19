@@ -18,7 +18,7 @@ function readTasksFromCSV() {
 
     // CSVファイルを読み込み、各行をオブジェクトに変換
     fs.createReadStream(CSV_PATH, { encoding: 'utf8' })
-      .pipe(csv(['title', 'taskType', 'repeatType', 'interval', 'weekdays', 'monthdays', 'nextDate', 'startDate', 'lastDone', 'isToday', 'isOverdue']))
+      .pipe(csv(['title', 'taskType', 'repeatType', 'interval', 'weekdays', 'monthdays', 'nextDate', 'startDate', 'lastDone', 'isToday', 'isOverdue', 'isDeleted']))
       .on('data', (data) => {
         if (!data.title || data.title === 'title') return;
         // isTodayとisOverdueをbooleanに変換
@@ -43,7 +43,8 @@ function appendTaskToCSV(task) {
   const lastDone = task.lastDone || '';
   const isToday = task.isToday;
   const isOverdue = task.isOverdue;
-  const line = `"${title}",${taskType},${repeatType},${interval},${weekdays},${monthdays},${nextDate},${startDate},${lastDone},${isToday},${isOverdue}\n`;
+  const isDeleted =  false;
+  const line = `"${title}",${taskType},${repeatType},${interval},${weekdays},${monthdays},${nextDate},${startDate},${lastDone},${isToday},${isOverdue},${isDeleted}\n`;
   fs.appendFileSync(CSV_PATH, line);
 }
 
@@ -69,7 +70,6 @@ function readMarksFromCSV() {
 
 function writeMarksToCSV(marks) {
   const header = 'title,date\n';
-  console.log(`Writing marks to ${MARKS_CSV_PATH}`);
   const entries = Object.entries(marks);
   const filtered = entries.filter(([title, date]) => title !== 'title' && date !== 'date');
   const lines = filtered.map(([title, date]) => `"${title}",${date}`).join('\n');
@@ -93,9 +93,9 @@ async function updateTaskFieldsByTitle(title, updateFields) {
     }
   }
   if (updated) {
-    const header = 'title,taskType,repeatType,interval,weekdays,monthdays,nextDate,startDate,lastDone,isToday,isOverdue\n';
+    const header = 'title,taskType,repeatType,interval,weekdays,monthdays,nextDate,startDate,lastDone,isToday,isOverdue,isDeleted\n';
     const lines = tasks.map(t =>
-      `"${t.title}",${t.taskType},${t.repeatType || ''},${t.interval || ''},${t.weekdays || ''},${t.monthdays || ''},${t.nextDate || ''},${t.startDate || ''},${t.lastDone || ''},${t.isToday},${t.isOverdue}`
+      `"${t.title}",${t.taskType},${t.repeatType || ''},${t.interval || ''},${t.weekdays || ''},${t.monthdays || ''},${t.nextDate || ''},${t.startDate || ''},${t.lastDone || ''},${t.isToday},${t.isOverdue},${t.isDeleted || ''}`
     ).join('\n');
     fs.writeFileSync(CSV_PATH, header + lines + '\n');
   }

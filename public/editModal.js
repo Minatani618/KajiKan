@@ -25,7 +25,7 @@ function createEditModal(task) {
   editHtml += `<div id='editMonthdayInput' style='${task.repeatType==='monthday'?'':'display:none;'}'><label>日指定<input id='editMonthdays' value='${task.monthdays||''}'></label></div>`;
   editHtml += `<div id='editOnceInput' style='${task.repeatType==='once'?'':'display:none;'}'><label>実行日<input id='editOnceDate' type='date' value='${task.nextDate||''}'></label></div>`;
   editHtml += `<label>開始日 <input id='editStartDate' type='date' value='${startDateVal}'></label><br>`;
-  editHtml += `<button id='editSaveBtn'>保存</button> <button id='editCancelBtn'>キャンセル</button></div></div>`;
+  editHtml += `<button id='editSaveBtn'>保存</button> <button id='editCancelBtn'>キャンセル</button> <button id='editDeleteBtn'>削除</button></div></div>`;
   document.body.insertAdjacentHTML('beforeend', editHtml);
   setTimeout(() => {
     const editStartDate = document.getElementById('editStartDate');
@@ -87,9 +87,21 @@ function setupEditModalEvents(task, requiredFields, onSave) {
     }
     await onSave(task, values);
     document.getElementById('editModal').remove();
+          //ページを更新
+      location.reload();
   };
   document.getElementById('editCancelBtn').onclick = function() {
     document.getElementById('editModal').remove();
+  };
+  document.getElementById('editDeleteBtn').onclick = async function() {
+    if (confirm('本当にこのタスクを削除しますか？')) {
+      await fetch(`/api/tasks/${encodeURIComponent(task.title)}`, {
+        method: 'DELETE'
+      });
+      document.getElementById('editModal').remove();
+      //ページを更新
+      location.reload();
+    }
   };
 }
 
