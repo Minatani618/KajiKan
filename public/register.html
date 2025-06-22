@@ -297,6 +297,7 @@
         msg.textContent = data.error || 'エラーが発生しました';
         msg.className = 'msg error';
       }
+      location.reload(); // ページをリロードしてタスク一覧を更新
     };
 
   </script>

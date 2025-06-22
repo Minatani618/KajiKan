@@ -1,10 +1,8 @@
-// taskLogic.js
-const { getJSTDay, getDiffDays } = require('./dateUtils');
+const { getTodayStrInJapan, getDiffDays, getDayOfWeekInJapan, getTargetDayOfMonth, calculateDate } = require('./dateUtils');
 
-function calculateNextDate(task, todayJSTDate) {
-  const startDateObj = new Date(task.startDate);
-  const todayObj = new Date(todayJSTDate.getFullYear(), todayJSTDate.getMonth(), todayJSTDate.getDate());
-  const baseDate = (startDateObj > todayObj) ? startDateObj : todayObj;
+function calculateNextDate(task, baseDateStr) {
+  const baseDate = (task.startDate > baseDateStr) ? task.startDate : baseDateStr;
+
   if (task.repeatType === 'interval') {
     return calcNextDateInterval(task, baseDate);
   } else if (task.repeatType === 'weekday') {
@@ -12,7 +10,7 @@ function calculateNextDate(task, todayJSTDate) {
   } else if (task.repeatType === 'monthday') {
     return calcNextDateMonthday(task, baseDate);
   } else if (task.repeatType === 'once') {
-    return task.startDate  || '';
+    return calcNextDateOnce(task, baseDate);
   }
   return '';
 }
@@ -21,24 +19,37 @@ function calcNextDateInterval(task, baseDate) {
   const interval = parseInt(task.interval, 10);
   const lastDone = task.lastDone || null;
   let nextDate;
-  if (lastDone) {
-    nextDate = new Date(lastDone);
-    nextDate.setDate(nextDate.getDate() + interval);
-    while (nextDate < baseDate) {
-      nextDate.setDate(nextDate.getDate() + interval);
-    }
-  } else {
-    nextDate = new Date(baseDate);
+  // 初回登録時 (nextDateがない場合) はstartDateをnextDateにする
+  if (!task.nextDate) {
+    return baseDate;
   }
-  return nextDate.toISOString().slice(0, 10);
+
+  // pointタスクの場合かまだ一度も実行されたことのないstockタスクの場合、基準日以降で周期に合致する最も近い日付を計算する
+  if (task.taskType === 'point' || !lastDone) {
+    nextDate = calculateDate(baseDate, interval);
+    while (nextDate < baseDate) {
+      nextDate = calculateDate(baseDate, interval);
+    }
+    return nextDate
+  }
+
+  // stockタスクの場合、lastDoneからinterval日後の日付を計算する
+  if (task.taskType === 'stock') {
+    nextDate = calculateDate(lastDone, interval);
+    while (nextDate < baseDate) {
+      nextDate = calculateDate(baseDate, interval);
+    }
+    return nextDate
+  }
+
+  console.log(`Unknown task type: ${task.taskType}`);
 }
 
 function calcNextDateWeekday(task, baseDate) {
   const weekdays = (task.weekdays || '').split('-').map(s => s.trim()).filter(Boolean).map(Number);
-  if (weekdays.length === 0) return '';
-  const baseWeekday = getJSTDay(baseDate);
+  const baseWeekday = getDayOfWeekInJapan(baseDate);
   if (weekdays.includes(baseWeekday)) {
-    return baseDate.toISOString().slice(0, 10);
+    return baseDate
   }
   let minDiff = 7;
   for (const wd of weekdays) {
@@ -46,17 +57,15 @@ function calcNextDateWeekday(task, baseDate) {
     if (diff === 0) diff = 7;
     if (diff < minDiff) minDiff = diff;
   }
-  const next = new Date(baseDate);
-  next.setDate(baseDate.getDate() + minDiff);
-  return next.toISOString().slice(0, 10);
+  const next = calculateDate(baseDate, minDiff);
+  return next
 }
 
 function calcNextDateMonthday(task, baseDate) {
   const monthdays = (task.monthdays || '').split('-').map(s => parseInt(s, 10)).filter(Boolean);
-  if (monthdays.length === 0) return '';
-  const baseDay = baseDate.getDate();
+  const baseDay = getTargetDayOfMonth(baseDate);
   if (monthdays.includes(baseDay)) {
-    return baseDate.toISOString().slice(0, 10);
+    return baseDate;
   }
   let minDiff = 32;
   for (const d of monthdays) {
@@ -64,10 +73,24 @@ function calcNextDateMonthday(task, baseDate) {
     if (diff < 0) diff += 31;
     if (diff < minDiff) minDiff = diff;
   }
-  const next = new Date(baseDate);
-  next.setDate(baseDate.getDate() + minDiff);
-  return next.toISOString().slice(0, 10);
+  const next = calculateDate(baseDate, minDiff);
+  return next
 }
+
+function calcNextDateOnce(task, baseDate) {
+  const baseDateStr = baseDate
+  //初回
+  if (!task.nextDate) {
+    if (task.startDate < baseDateStr){
+      return baseDateStr;
+    }else{
+      return task.startDate;
+    }
+  }
+
+  return baseDateStr;
+}
+
 
 function classifyTask(task, marks, today, todayStr, todayWeekday, todayDate) {
   let isToday = false;
@@ -98,13 +121,12 @@ function classifyIntervalTask(task, todayStr) {
   const lastDone = task.lastDone || null;
   let nextDate;
   if (lastDone) {
-    nextDate = new Date(lastDone);
-    nextDate.setDate(nextDate.getDate() + interval);
+    nextDate= calculateDate(lastDone, interval);
   } else {
     nextDate = new Date(task.startDate);
   }
   while (nextDate.toISOString().slice(0, 10) < todayStr) {
-    nextDate.setDate(nextDate.getDate() + interval);
+    nextDate= calculateDate(nextDate, interval);
   }
   const nextDateStr = nextDate.toISOString().slice(0, 10);
   const isToday = (todayStr === nextDateStr);
@@ -137,9 +159,8 @@ function classifyWeekdayTask(task, today, todayWeekday) {
     if (diff === 0) diff = 7;
     if (diff < minDiff) minDiff = diff;
   }
-  const next = new Date(today);
-  next.setDate(today.getDate() + minDiff);
-  nextExecDate = next.toISOString().slice(0, 10);
+  
+  nextExecDate = calculateDate(today, minDiff);
   return { isToday, msg, nextExecDate };
 }
 
@@ -152,9 +173,7 @@ function classifyMonthdayTask(task, today, todayDate) {
     if (diff < 0) diff += 31;
     if (diff < minDiff) minDiff = diff;
   }
-  const next = new Date(today);
-  next.setDate(todayDate + minDiff);
-  const nextExecDate = next.toISOString().slice(0, 10);
+  const nextExecDate = calculateDate(today, minDiff);
   let msg = '';
   if (!isToday) msg = `次回: ${monthdays.join('-')}日`;
   return { isToday, msg, nextExecDate };
@@ -211,7 +230,7 @@ function filterTodayTasks(tasks, todayStr) {
       return nextDate === todayStr;
     } else if (task.repeatType === 'weekday') {
       const weekdays = (task.weekdays || '').split('-').map(s => s.trim()).filter(Boolean).map(Number);
-      return weekdays.includes(getJSTDay(new Date()));
+      return weekdays.includes(getDayOfWeekInJapan(todayStr));
     } else if (task.repeatType === 'monthday') {
       const monthdays = (task.monthdays || '').split('-').map(s => parseInt(s, 10)).filter(Boolean);
       return monthdays.includes(new Date().getDate());
@@ -234,8 +253,7 @@ function updateTaskState(task, todayStr) {
   } else {
     // nextDateが空、またはisOverdue=falseかつnextDateが過去なら再計算
     if (!task.nextDate || task.nextDate < todayStr) {
-      const todayJSTDate = new Date(todayStr);
-      task.nextDate = calculateNextDate(task, todayJSTDate);
+      task.nextDate = calculateNextDate(task, todayStr);
     }
     // isTodayの判定
     task.isToday = task.nextDate === todayStr;

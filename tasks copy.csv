@@ -1,0 +1,11 @@
+title,taskType,repeatType,interval,weekdays,monthdays,nextDate,startDate,lastDone,isToday,isOverdue,isDeleted
+"5",stock,interval,1,,,2025-06-22,2025-06-15,,true,false,
+"6",stock,interval,1,,,2025-06-22,2025-06-22,,true,false,
+"7",stock,weekday,,1-4,,2025-06-23,2025-06-22,,false,false,
+"8",stock,monthday,,,23-30,2025-06-23,2025-06-02,,false,false,
+"9",stock,once,,,,2025-06-29,2025-06-29,,false,false,
+"10",stock,once,,,,2025-06-22,2025-06-22,,true,false,
+"point1int3",point,interval,3,,,2025-06-22,2025-06-22,,true,false,
+"point2week",point,weekday,,1-3-6,,2025-06-23,2025-06-22,,false,false,
+"point3month",point,monthday,,,22,2025-06-22,2025-06-22,,false,false,
+"point4once",point,once,,,,2025-06-22,2025-06-22,,true,false,

@@ -16,7 +16,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // CSV関連ユーティリティ
 const { readTasksFromCSV, appendTaskToCSV, readMarksFromCSV, writeMarksToCSV, updateTaskFieldsByTitle, getTaskByTitle } = require('./csvUtils');
 // 日付関連ユーティリティ
-const { getTodayJST, getTodayJSTDate, getJSTDay, getDiffDays } = require('./dateUtils');
+const { getDayOfWeekInJapan, getTodayStrInJapan, getTomorrowStrInJapan, getDiffDays } = require('./dateUtils');
 // タスクロジック
 const { calculateNextDate, calcNextDateInterval, calcNextDateWeekday, calcNextDateMonthday, classifyTask, classifyIntervalTask, classifyWeekdayTask, classifyMonthdayTask, classifyOnceTask, classifyTasks, filterTodayTasks } = require('./taskLogic');
 // バリデーション
@@ -43,9 +43,8 @@ app.post('/api/tasks', async (req, res) => {
   await appendTaskToCSV(task);
   
   //nextDateを算出
-  const todayJSTDate = getTodayJSTDate();
-  const todayStr = todayJSTDate.toISOString().slice(0, 10);
-  task.nextDate = calculateNextDate(task, todayJSTDate);
+  const todayStr = getTodayStrInJapan();
+  task.nextDate = calculateNextDate(task, todayStr);
 
   //isTodayを算出
   task.isToday = task.nextDate === todayStr
@@ -109,7 +108,7 @@ app.put('/api/tasks/:title', async (req, res) => {
   };
 
   //nextdate算出
-  const todayJSTDate = getTodayJSTDate();
+  const todayJSTDate = getTodayStrInJapan();
   updatedTask.nextDate = calculateNextDate(updatedTask, todayJSTDate);
 
   //isTodayを算出
@@ -138,7 +137,7 @@ app.put('/api/tasks/:title', async (req, res) => {
 app.post('/api/tasks/:title/done', async (req, res) => {
   const { title } = req.params;
   let tasks = await readTasksFromCSV();
-  const today = getTodayJST();
+  const today = getTodayStrInJapan();
   let removed = false;
   tasks = tasks.filter(task => {
     if (task.title === title && task.repeatType === 'once') {
@@ -153,7 +152,7 @@ app.post('/api/tasks/:title/done', async (req, res) => {
     }
     return task;
   });
-  const header = 'title,taskType,repeatType,interval,weekdays,monthdays,nextDate,startDate,lastDone\n';
+  const header = 'title,taskType,repeatType,interval,weekdays,monthdays,nextDate,startDate,lastDone,isToday,isOverdue,isDeleted\n';
   const lines = updated.map(t => `"${t.title}",${t.taskType},${t.repeatType || ''},${t.interval || ''},${t.weekdays || ''},${t.monthdays || ''},${t.nextDate || ''},${t.startDate || ''},${t.lastDone || ''}`).join('\n');
   fs.writeFileSync(CSV_PATH, header + lines + '\n');
   res.json({ message: removed ? '一回限りタスクを完了し削除しました' : 'タスクを実行済みにしました' });
@@ -170,7 +169,7 @@ app.post('/api/tasks/:title/mark', async (req, res) => {
   const { title } = req.params;
   const { marked } = req.body;
   const marks = await readMarksFromCSV();
-  const today = getTodayJST();
+  const today = getTodayStrInJapan();
 
   //対象タスクのマーク状態を更新
   if (marked) {
@@ -209,13 +208,19 @@ app.listen(PORT, () => {
 
 //タスクの状態更新
 async function updateTasksForNewDay() {
-  const today = getTodayJST();
-  const todayStr = today.toISOString().slice(0, 10);
-  const tomorrowStr = new Date(today.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10); // 翌日の日付
+  const todayStr = getTodayStrInJapan();
+  const tomorrowStr = getTomorrowStrInJapan();
+
+
   const marks = await readMarksFromCSV();
   const tasks = await readTasksFromCSV();
 
   const updatedTasks = tasks.map(task => {
+
+    //そもそも未来のタスクは更新しない
+    if (new Date(task.nextDate) > todayStr) {
+      return task;
+    }
 
     // marksの内容によってlastDoneを更新
     if (marks[task.title] === todayStr) {
@@ -223,15 +228,27 @@ async function updateTasksForNewDay() {
       task.isOverdue = false;
     }
 
+    // isOverdueを更新
+    if (task.taskType === 'stock' && task.nextDate <= todayStr && task.lastDone < todayStr) {
+      task.isOverdue = true; // ストックタスクで次回実行日が今日以前で、まだ実行していない場合は期限切れ
+    }else {
+      task.isOverdue = false; // それ以外は期限切れではない
+    }
+
     // nextDateとisTodayを更新
-    task.nextDate = calculateNextDate(task, today);
-    task.isToday = task.nextDate === tomorrowStr;   // 翌日にやるべきタスクかどうか
+    if (task.taskType === 'stock' && task.isOverdue) {   //stockタスクで期限切れの場合
+      task.nextDate = tomorrowStr; 
+      task.isToday = true; 
+    }else{                                               //それ以外(stockタスクだが遅延なくやっているorポイントタスク)
+      task.nextDate = calculateNextDate(task, tomorrowStr);
+      task.isToday = task.nextDate === tomorrowStr;
+    }
 
     return task;
   });
 
   // tasks.csvを更新
-  const header = 'title,taskType,repeatType,interval,weekdays,monthdays,nextDate,startDate,lastDone,isToday,isOverdue\n';
+  const header = 'title,taskType,repeatType,interval,weekdays,monthdays,nextDate,startDate,lastDone,isToday,isOverdue,isDeleted\n';
   const lines = updatedTasks.map(t =>
     `"${t.title}",${t.taskType || ''},${t.repeatType || ''},${t.interval || ''},${t.weekdays || ''},${t.monthdays || ''},${t.nextDate || ''},${t.startDate || ''},${t.lastDone || ''},${t.isToday},${t.isOverdue}`
   ).join('\n');
@@ -250,4 +267,6 @@ function scheduleUpdateTasks() {
     setInterval(updateTasksForNewDay, 24 * 60 * 60 * 1000); // 24時間ごとに実行
   }, millisUntil2355);
 }
+
+updateTasksForNewDay(); // テスト実行
 scheduleUpdateTasks();

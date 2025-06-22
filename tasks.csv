@@ -1,9 +1,2 @@
 title,taskType,repeatType,interval,weekdays,monthdays,nextDate,startDate,lastDone,isToday,isOverdue,isDeleted
-"東京技術の現場ネットワークの件を斎藤さんにお願いする",stock,once,,,,2025-06-16,2025-06-16,,false,false,true
-"部署ごとに持つはずのクレジットカードがどうなっているか確認",stock,once,,,,2025-06-19,2025-06-19,,true,false,
-"斎藤洋平さんのPC中身確認",stock,once,,,,2025-06-16,2025-06-16,2025-06-16,false,false,true
-"GAC現時点での画面系を理解する",point,once,,,,2025-06-17,2025-06-17,2025-06-17,false,false,true
-"九州の書き出し権限について豊田さんに依頼する",stock,once,,,,2025-06-19,2025-06-19,,true,false,
-"gacの画面を作成",point,once,,,,2025-06-19,2025-06-19,,true,false,
-"gac用のパソコン2台をバッチファイルまで",stock,once,,,,2025-06-19,2025-06-19,,true,false,
-"テストタスクsuru",stock,once,,,,2025-06-19,2025-06-19,,true,false,true
+
